@@ -1,0 +1,14 @@
+# Single entry point. Base stacks (general, nginx, sso) have no profile and
+# always start. Everything else is a profile you opt into:
+#   ./dev up recipes      (see ./dev ls)
+name: api-gateway-env
+
+include:
+  - path: general/docker-compose.general.yml
+    project_directory: .
+  - path: nginx/docker-compose.nginx.yml
+    project_directory: .
+  - path: sso/docker-compose.keycloak.yml
+    project_directory: .
+  - path: recipes/docker-compose.recipes.yml                       # profile: recipes
+    project_directory: .

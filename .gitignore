@@ -1,0 +1,36 @@
+# MCP build output / transient build state
+**/mcp/dist/
+**/mcp/assets/node_modules/
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local env files
+*.env
+*.local
+*.secret
+.env
+
+# Ignore certificates and keys
+certs/
+*.crt
+*.key
+*.pem
+*.cert
+*.cer
+*.p12
+*.jks
+*.der
+*.pfx
+*.csr
+*.srl
+*.p7b
+*.p7c
+*.jceks
+*.bks
+*.truststore
+*.keystore
+
+.idea/

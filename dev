@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# One command for the whole stack. Base (nginx, sso) always runs; everything
+# else is an opt-in profile.
+#
+#   ./dev ls                       profiles + what is running
+#   ./dev up [profile...] [flags]  start base + the given profiles (others untouched);
+#                                  everything from the first -flag on goes to `docker compose up`
+#                                  (e.g. ./dev up recipes --force-recreate --scale web=2)
+#   ./dev down <profile...|all>    stop just those profiles (or everything)
+#   ./dev reload                   reload nginx after editing nginx/confs (no recreate)
+#   ./dev logs [service...]        follow logs
+#   ./dev <anything else>          passed straight to `docker compose`
+cd "$(dirname "$0")"
+
+dc() { docker compose "$@"; }
+profiles() { dc config --profiles | sort; }
+# services that only exist when the profile is active (excludes base services)
+profile_services() {
+  comm -13 <(dc config --services | sort) <(dc --profile "$1" config --services | sort)
+}
+check() {
+  local known; known=$(profiles)
+  for p in "$@"; do
+    grep -qx -- "$p" <<<"$known" || { echo "unknown profile '$p'. Available: $(echo $known)" >&2; exit 1; }
+  done
+}
+reload_nginx() {
+  if docker exec nginx nginx -c /etc/nginx/confs/nginx.conf -t >/dev/null 2>&1; then docker exec nginx nginx -s reload 2>/dev/null && echo "nginx reloaded"
+  elif docker ps -q -f name='^nginx$' | grep -q .; then docker exec nginx nginx -c /etc/nginx/confs/nginx.conf -t; exit 1; fi
+}
+
+cmd="${1:-ls}"; [ "$#" -gt 0 ] && shift || true
+case "$cmd" in
+  ls)
+    echo "profiles (./dev up <name>):"; profiles | sed 's/^/  /'
+    echo; dc ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
+    ;;
+  up)
+    profs=(); while [ "$#" -gt 0 ] && [[ "$1" != -* ]]; do profs+=("$1"); shift; done
+    check "${profs[@]}"
+    args=(); for p in "${profs[@]}"; do args+=(--profile "$p"); done
+    dc "${args[@]}" up -d --build "$@"
+    reload_nginx || true
+    ;;
+  down)
+    [ "$#" -gt 0 ] || { echo "usage: ./dev down <profile...|all>" >&2; exit 1; }
+    if [ "$1" = all ]; then
+      all=(); for p in $(profiles); do all+=(--profile "$p"); done
+      dc "${all[@]}" down
+    else
+      check "$@"
+      for p in "$@"; do
+        svcs=$(profile_services "$p")
+        # shellcheck disable=SC2086
+        dc --profile "$p" rm -sf $svcs
+      done
+    fi
+    ;;
+  reload) reload_nginx ;;
+  logs)   all=(); for p in $(profiles); do all+=(--profile "$p"); done; dc "${all[@]}" logs -f --tail=100 "$@" ;;
+  *)      all=(); for p in $(profiles); do all+=(--profile "$p"); done; dc "${all[@]}" "$cmd" "$@" ;;
+esac

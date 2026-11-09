@@ -1,0 +1,17 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    # Whole confs/ dir is mounted (not single files) so edits show up in the
+    # container and `./dev reload` is enough - no recreate needed.
+    command: ["nginx", "-c", "/etc/nginx/confs/nginx.conf", "-g", "daemon off;"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/confs:/etc/nginx/confs:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/confs/domainNotFound.html:/usr/share/nginx/html/domainNotFound.html:ro
+    networks:
+      api-gateway-env:

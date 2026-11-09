@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "keycloak": {
+      "command": "./sso/mcp/run.sh"
+    },
+    "tandoor-recipes": {
+      "command": "./recipes/mcp/run.sh"
+    }
+  }
+}

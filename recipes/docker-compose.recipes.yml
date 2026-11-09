@@ -1,0 +1,67 @@
+services:
+  db_recipes:
+    profiles: [recipes]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: recipes-postgres
+    environment:
+      POSTGRES_DB: djangodb
+      POSTGRES_USER: djangouser
+      POSTGRES_PASSWORD: ${RECIPES_POSTGRES_PASSWORD:?set RECIPES_POSTGRES_PASSWORD in .env}
+    volumes:
+      - recipes_postgresql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U djangouser -d djangodb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      api-gateway-env:
+
+  web_recipes:
+    profiles: [recipes]
+    image: vabene1111/recipes:2.7.2
+    restart: unless-stopped
+    container_name: recipes-web-ui
+    environment:
+      SECRET_KEY: ${RECIPES_SECRET_KEY:?set RECIPES_SECRET_KEY in .env}
+      TZ: Etc/UTC
+      ALLOWED_HOSTS: localhost,127.0.0.1,recipesweb,localhost:${TANDOOR_PORT:-6060},127.0.0.1:${TANDOOR_PORT:-6060},recipes.docker.local,.trycloudflare.com
+      CSRF_TRUSTED_ORIGINS: https://*.trycloudflare.com # phone access via the recipes-tunnel profile
+      DB_ENGINE: django.db.backends.postgresql
+      POSTGRES_HOST: db_recipes
+      POSTGRES_DB: djangodb
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: djangouser
+      POSTGRES_PASSWORD: ${RECIPES_POSTGRES_PASSWORD:?set RECIPES_POSTGRES_PASSWORD in .env}
+    ports:
+      - "${TANDOOR_PORT:-6060}:80" # route
+    volumes:
+      - recipes_staticfiles:/opt/recipes/staticfiles
+      - recipes_mediafiles:/opt/recipes/mediafiles
+    depends_on:
+      db_recipes:
+        condition: service_healthy
+    networks:
+      api-gateway-env:
+
+  # Public https://<random>.trycloudflare.com URL for Tandoor (no Cloudflare account needed).
+  # The URL changes on every start: ./dev logs recipes-tunnel
+  recipes-tunnel:
+    profiles: [recipes-tunnel]
+    image: cloudflare/cloudflared:2025.10.0
+    container_name: recipes-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://recipes-web-ui:80
+    depends_on:
+      - web_recipes
+    networks:
+      api-gateway-env:
+
+volumes:
+  recipes_postgresql:
+    name: recipes_postgresql
+  recipes_staticfiles:
+    name: recipes_staticfiles
+  recipes_mediafiles:
+    name: recipes_mediafiles
